@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MAX_BALLS 50
-#define WINDOW_WIDTH 1200
-#define WINDOW_HEIGHT 900
+#define MAX_BALLS 100
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
 
 typedef struct {
     float x, y;
@@ -14,21 +14,19 @@ typedef struct {
     vec position;
     vec velocity;
     float radius;
-} ball;
+} Ball;
 
-ball balls[MAX_BALLS];
+Ball balls[MAX_BALLS];
 int ball_count = 0;
 
 void spawn_ball(float x, float y){
     balls[ball_count].position.x = x;
     balls[ball_count].position.y = y;
 
-    balls[ball_count].velocity.x = rand() % 2 + (-1);
-    if (balls[ball_count].velocity.x == 0) balls[ball_count].velocity.x = 1;
-    balls[ball_count].velocity.y = rand() % 3 + (-1);
-    if (balls[ball_count].velocity.y == 0) balls[ball_count].velocity.y = 1;
+    balls[ball_count].velocity.x =  (rand() % 3) * 2 - 1;
+    balls[ball_count].velocity.y =  (rand() % 3) * 2 - 1;
 
-    balls[ball_count].radius = 20;
+    balls[ball_count].radius = 25.0;
     ball_count++;
 }
 
@@ -42,11 +40,11 @@ void update_balls() {
 
         if (balls[i].position.y + balls[i].radius > WINDOW_HEIGHT){
             balls[i].position.y = WINDOW_HEIGHT - balls[i].radius;
-            balls[i].velocity.y *= -1;
+            balls[i].velocity.y *= -1 * 0.7f;
         }
         if (balls[i].position.y - balls[i].radius < 0) {
             balls[i].position.y = balls[i].radius;
-            balls[i].velocity.y *= -1;
+            balls[i].velocity.y *= -1 * 0.7f;
         }
 
         if (balls[i].position.x - balls[i].radius < 0) {
@@ -56,6 +54,32 @@ void update_balls() {
         if (balls[i].position.x + balls[i].radius > WINDOW_WIDTH) {
             balls[i].position.x = WINDOW_WIDTH - balls[i].radius;
             balls[i].velocity.x *= -1;
+        }
+
+        for (int j = i + 1; j < ball_count; j++){
+            float dx = balls[j].position.x - balls[i].position.x;
+            float dy = balls[j].position.y - balls[i].position.y;
+            float dist = sqrt(dx * dx + dy * dy);
+
+            if (dist <= balls[i].radius + balls[j].radius){
+                float tempvx = balls[i].velocity.x;
+                float tempvy = balls[i].velocity.y;
+                
+                balls[i].velocity.x = balls[j].velocity.x;
+                balls[i].velocity.y = balls[j].velocity.y;
+                balls[j].velocity.x = tempvx;
+                balls[j].velocity.y = tempvy;
+
+                float overlap = balls[i].radius + balls[j].radius - dist;
+
+                float nx = dx / dist;
+                float ny = dy / dist;
+
+                balls[i].position.x -= nx * overlap;
+                balls[i].position.y -= ny * overlap;
+                balls[j].position.x += nx * overlap;
+                balls[j].position.y += ny * overlap;
+            }
         }
     }
 }
