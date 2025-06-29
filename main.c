@@ -21,14 +21,14 @@ int ball_count = 0;
 void spawn_ball(float x, float y){
     balls[ball_count].position.x = x;
     balls[ball_count].position.y = y;
-    balls[ball_count].velocity.x = 1;
-    balls[ball_count].velocity.y = 1;
+    balls[ball_count].velocity.x = 1.0f;
+    balls[ball_count].velocity.y = 1.0f;
     balls[ball_count].radius = 20;
     ball_count++;
 }
 
 void update_balls() {
-    float gravity = 9.80;
+    float gravity = 9.80f;
 
     for (int i = 0; i < ball_count; i++) {
         balls[i].velocity.y += gravity;
@@ -37,6 +37,11 @@ void update_balls() {
 
         if (balls[i].position.y + balls[i].radius > WINDOW_HEIGHT){
             balls[i].position.y = WINDOW_HEIGHT - balls[i].radius;
+            balls[i].velocity.y *= -1;
+        }
+        
+        if (balls[i].position.y - balls[i].radius < 0) {
+            balls[i].position.y = balls[i].radius;
             balls[i].velocity.y *= -1;
         }
 
