@@ -1,9 +1,10 @@
 #include <SDL3/SDL.h>
-#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 
-#define MAX_BALLS 100
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define MAX_BALLS 50
+#define WINDOW_WIDTH 1200
+#define WINDOW_HEIGHT 900
 
 typedef struct {
     float x, y;
@@ -21,14 +22,18 @@ int ball_count = 0;
 void spawn_ball(float x, float y){
     balls[ball_count].position.x = x;
     balls[ball_count].position.y = y;
-    balls[ball_count].velocity.x = 1.0f;
-    balls[ball_count].velocity.y = 1.0f;
+
+    balls[ball_count].velocity.x = rand() % 2 + (-1);
+    if (balls[ball_count].velocity.x == 0) balls[ball_count].velocity.x = 1;
+    balls[ball_count].velocity.y = rand() % 3 + (-1);
+    if (balls[ball_count].velocity.y == 0) balls[ball_count].velocity.y = 1;
+
     balls[ball_count].radius = 20;
     ball_count++;
 }
 
 void update_balls() {
-    float gravity = 9.80f;
+    float gravity = 0;
 
     for (int i = 0; i < ball_count; i++) {
         balls[i].velocity.y += gravity;
@@ -39,7 +44,6 @@ void update_balls() {
             balls[i].position.y = WINDOW_HEIGHT - balls[i].radius;
             balls[i].velocity.y *= -1;
         }
-        
         if (balls[i].position.y - balls[i].radius < 0) {
             balls[i].position.y = balls[i].radius;
             balls[i].velocity.y *= -1;
@@ -56,15 +60,21 @@ void update_balls() {
     }
 }
 
+void draw_ball(SDL_Renderer *renderer, float px, float py, int radius){
+    int cx = (int)px;
+    int cy = (int)py;
+    int r = radius;
+    int r_squared = r*r;
+
+    for (int y = -r; y <= r; y++){
+        int x = (int)sqrt(r_squared - y*y);
+        SDL_RenderLine(renderer, cx - x, cy + y, cx + x, cy + y);
+    }
+}
+
 void render_balls(SDL_Renderer *renderer){
     for (int i = 0; i < ball_count; i++){
-        for (int y = -(balls[i].radius); y <= (balls[i].radius); y++){
-            for (int x = -(balls[i].radius); x <= (balls[i].radius); x++){
-                if (x*x + y*y <= balls[i].radius * balls[i].radius){
-                    SDL_RenderPoint(renderer, balls[i].position.x + x, balls[i].position.y + y);
-                }
-            }
-        }
+        draw_ball(renderer, balls[i].position.x, balls[i].position.y, balls[i].radius);
     }
 }
 
@@ -72,13 +82,13 @@ int main() {
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
 
-    int result = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
-    if (result < 0) {
+    int result1 = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+    if (result1 < 0) {
         SDL_Log("SDL_Init error: %s", SDL_GetError());
         return -1;
     }
 
-    window = SDL_CreateWindow("physics engine", 800, 600, 0);
+    window = SDL_CreateWindow("physics engine", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     if (window == NULL) {
         SDL_Log("SDL_CreateWindow: %s", SDL_GetError());
         return -2;
@@ -90,6 +100,12 @@ int main() {
         return -3;
     }
 
+    int result2 = SDL_SetRenderVSync(renderer, true);
+    if (result2 < 0){
+        SDL_Log("Warning: Could not enable VSYNC: %s", SDL_GetError());
+        return -4;
+    }
+
     SDL_Log("SDL3 Initialized");
 
     SDL_Event event;
@@ -98,7 +114,7 @@ int main() {
     while (!quit) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) quit = 1;
-            else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN){
+            else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && ball_count < MAX_BALLS){
                 float mx, my;
                 SDL_GetMouseState(&mx, &my);
                 spawn_ball((float)mx, (float)my);
@@ -113,7 +129,6 @@ int main() {
         render_balls(renderer);        
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(10);
     }
 
     SDL_Log("SDL3 shutdown");
