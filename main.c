@@ -1,10 +1,12 @@
+#define _USE_MATH_DEFINES
 #include <SDL3/SDL.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 
 #define MAX_BALLS 100
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1200
+#define WINDOW_HEIGHT 900
 
 typedef struct {
     float x, y;
@@ -14,7 +16,28 @@ typedef struct {
     vec position;
     vec velocity;
     float radius;
+    float mass;
 } Ball;
+
+vec v_add(vec a, vec b){
+    return (vec){a.x + b.x, a.y + b.y};
+}
+
+vec v_sub(vec a, vec b){
+    return (vec){a.x - b.x, a.y - b.y};
+}
+
+vec v_mul(vec a, float b){
+    return (vec){a.x * b, a.y * b};
+}
+
+float v_dot(vec a, vec b){
+    return (float)(a.x * b.x + a.y * b.y);
+}
+
+float v_len2(vec a){
+    return v_dot(a, a);
+}
 
 Ball balls[MAX_BALLS];
 int ball_count = 0;
@@ -27,49 +50,29 @@ void spawn_ball(float x, float y){
     balls[ball_count].velocity.y =  (rand() % 3) * 2 - 1;
 
     balls[ball_count].radius = 25.0;
+    balls[ball_count].mass = 1.0f;
     ball_count++;
 }
 
+void handle_box_collisions(Ball *ball);
+void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2);
+
 void update_balls() {
-    float gravity = 0;
+    float gravity = 0.2f;
 
     for (int i = 0; i < ball_count; i++) {
         balls[i].velocity.y += gravity;
         balls[i].position.x += balls[i].velocity.x;
         balls[i].position.y += balls[i].velocity.y;
 
-        if (balls[i].position.y + balls[i].radius > WINDOW_HEIGHT){
-            balls[i].position.y = WINDOW_HEIGHT - balls[i].radius;
-            balls[i].velocity.y *= -1 * 0.7f;
-        }
-        if (balls[i].position.y - balls[i].radius < 0) {
-            balls[i].position.y = balls[i].radius;
-            balls[i].velocity.y *= -1 * 0.7f;
-        }
-
-        if (balls[i].position.x - balls[i].radius < 0) {
-            balls[i].position.x = balls[i].radius;
-            balls[i].velocity.x *= -1;
-        }
-        if (balls[i].position.x + balls[i].radius > WINDOW_WIDTH) {
-            balls[i].position.x = WINDOW_WIDTH - balls[i].radius;
-            balls[i].velocity.x *= -1;
-        }
+        handle_box_collisions(&balls[i]);
 
         for (int j = i + 1; j < ball_count; j++){
             float dx = balls[j].position.x - balls[i].position.x;
             float dy = balls[j].position.y - balls[i].position.y;
             float dist = sqrt(dx * dx + dy * dy);
-
+            
             if (dist <= balls[i].radius + balls[j].radius){
-                float tempvx = balls[i].velocity.x;
-                float tempvy = balls[i].velocity.y;
-                
-                balls[i].velocity.x = balls[j].velocity.x;
-                balls[i].velocity.y = balls[j].velocity.y;
-                balls[j].velocity.x = tempvx;
-                balls[j].velocity.y = tempvy;
-
                 float overlap = balls[i].radius + balls[j].radius - dist;
 
                 float nx = dx / dist;
@@ -79,21 +82,84 @@ void update_balls() {
                 balls[i].position.y -= ny * overlap;
                 balls[j].position.x += nx * overlap;
                 balls[j].position.y += ny * overlap;
+
+                handle_ball_to_ball_collision(&balls[i], &balls[j]);
             }
         }
     }
 }
 
-void draw_ball(SDL_Renderer *renderer, float px, float py, int radius){
-    int cx = (int)px;
-    int cy = (int)py;
-    int r = radius;
-    int r_squared = r*r;
-
-    for (int y = -r; y <= r; y++){
-        int x = (int)sqrt(r_squared - y*y);
-        SDL_RenderLine(renderer, cx - x, cy + y, cx + x, cy + y);
+void handle_box_collisions(Ball *ball) {
+    if (ball->position.y + ball->radius > WINDOW_HEIGHT) {
+        ball->position.y = WINDOW_HEIGHT - ball->radius;
+        if (ball->velocity.y > -1) ball->velocity.y = 0;
+        ball->velocity.y *= -1/2.0f;
     }
+    if (ball->position.y - ball->radius < 0) {
+        ball->position.y = ball->radius;
+        if (ball->velocity.y < 1) ball->velocity.y = 0;
+        ball->velocity.y *= -1/2.0f;
+    }
+
+    if (ball->position.x - ball->radius < 0) {
+        ball->position.x = ball->radius;
+        ball->velocity.x *= -1/2.0f;
+    }
+    if (ball->position.x + ball->radius > WINDOW_WIDTH) {
+        ball->position.x = WINDOW_WIDTH - ball->radius;
+        ball->velocity.x *= -1/2.0f;
+    }
+}
+
+void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2){
+    vec rel_pos_ball1 = v_sub(ball1->position, ball2->position);
+    vec rel_pos_ball2 = v_sub(ball2->position, ball1->position);
+
+    float b1_len2 = v_len2(rel_pos_ball1);
+    float b2_len2 = v_len2(rel_pos_ball2);
+
+    vec rel_vel_ball1 = v_sub(ball1->velocity, ball2->velocity);
+    vec rel_vel_ball2 = v_sub(ball2->velocity, ball1->velocity);
+
+    float dot_prod_ball1 = v_dot(rel_vel_ball1, rel_pos_ball1);
+    float dot_prod_ball2 = v_dot(rel_vel_ball2, rel_pos_ball2);
+
+    float mass_factor_ball1 = 2.0f * ball1->mass / (ball1->mass + ball2->mass);
+    float mass_factor_ball2 = 2.0f * ball2->mass / (ball1->mass + ball2->mass);
+
+    ball1->velocity = v_sub(ball1->velocity, v_mul(rel_pos_ball1, mass_factor_ball1 * dot_prod_ball1 / b1_len2));
+    ball2->velocity = v_sub(ball2->velocity, v_mul(rel_pos_ball2, mass_factor_ball2 * dot_prod_ball2 / b2_len2));
+}
+
+void draw_ball(SDL_Renderer *renderer, float px, float py, int radius){
+    const int segments = 32;
+    const int vertex_count = segments + 2;
+    SDL_Vertex vertices[vertex_count];
+
+    vertices[0].position.x = px;
+    vertices[0].position.y = py;
+    vertices[0].color = (SDL_FColor){255, 255, 255, 255};
+
+    for (int i = 0; i<=segments; i++){
+        float angle = ((float)i / (float)segments) * 2.0f * M_PI;
+        float x = px + radius * cosf(angle);
+        float y = py + radius * sinf(angle);
+
+        vertices[i+1].position.x = x;
+        vertices[i+1].position.y = y;
+        vertices[i+1].color = (SDL_FColor){255, 255, 255, 255};
+    }
+
+    const int indices_count = segments * 3;
+    int indices[indices_count];
+
+    for (int i = 0; i < segments; i++){
+        indices[i*3] = 0;
+        indices[i*3 + 1] = i + 1;
+        indices[i*3 + 2] = i + 2;
+    }
+
+    SDL_RenderGeometry(renderer, NULL, vertices, vertex_count, indices, indices_count);
 }
 
 void render_balls(SDL_Renderer *renderer){
@@ -141,7 +207,10 @@ int main() {
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && ball_count < MAX_BALLS){
                 float mx, my;
                 SDL_GetMouseState(&mx, &my);
-                spawn_ball((float)mx, (float)my);
+                for (int i = 0; i < 10; i++){
+                    spawn_ball((float)mx, (float)my);
+                }
+                printf("%d ", ball_count);
             }
         }
         update_balls();
