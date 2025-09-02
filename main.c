@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MAX_BALLS 100
-#define WINDOW_WIDTH 1200
-#define WINDOW_HEIGHT 900
+#define MAX_BALLS 500
+int WINDOW_WIDTH = 1200;
+int WINDOW_HEIGHT = 900;
 
 typedef struct {
     float x, y;
@@ -46,42 +46,44 @@ void spawn_ball(float x, float y){
     balls[ball_count].position.x = x;
     balls[ball_count].position.y = y;
 
-    balls[ball_count].velocity.x =  (rand() % 3) * 2 - 1;
-    balls[ball_count].velocity.y =  (rand() % 3) * 2 - 1;
+    balls[ball_count].velocity.x =  ((rand() % 3) * 2 - 1) * 10;
+    balls[ball_count].velocity.y =  ((rand() % 3) * 2 - 1) * 10;
 
-    balls[ball_count].radius = 25.0;
-    balls[ball_count].mass = 1.0f;
+    balls[ball_count].radius = 25.0f;
+    balls[ball_count].mass = fabs((rand() % 3) * 2 - 1);
     ball_count++;
 }
 
 void handle_box_collisions(Ball *ball);
 void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2);
 
-void update_balls() {
-    float gravity = 0.2f;
+void update_balls(float dt) {
+    float gravity = 0.0f;
 
     for (int i = 0; i < ball_count; i++) {
-        balls[i].velocity.y += gravity;
-        balls[i].position.x += balls[i].velocity.x;
-        balls[i].position.y += balls[i].velocity.y;
+        balls[i].velocity.y += gravity * dt;
+        balls[i].position.x += balls[i].velocity.x * dt;
+        balls[i].position.y += balls[i].velocity.y * dt;
 
         handle_box_collisions(&balls[i]);
 
         for (int j = i + 1; j < ball_count; j++){
             float dx = balls[j].position.x - balls[i].position.x;
             float dy = balls[j].position.y - balls[i].position.y;
-            float dist = sqrt(dx * dx + dy * dy);
-            
-            if (dist <= balls[i].radius + balls[j].radius){
+            float dist = sqrt(dx * dx + dy * dy) + 0.1f;
+
+            float percent = 0.5f;
+
+            if (dist < balls[i].radius + balls[j].radius){
                 float overlap = balls[i].radius + balls[j].radius - dist;
 
                 float nx = dx / dist;
                 float ny = dy / dist;
 
-                balls[i].position.x -= nx * overlap;
-                balls[i].position.y -= ny * overlap;
-                balls[j].position.x += nx * overlap;
-                balls[j].position.y += ny * overlap;
+                balls[i].position.x -= nx * overlap * percent;
+                balls[i].position.y -= ny * overlap * percent;
+                balls[j].position.x += nx * overlap * percent;
+                balls[j].position.y += ny * overlap * percent;
 
                 handle_ball_to_ball_collision(&balls[i], &balls[j]);
             }
@@ -92,7 +94,7 @@ void update_balls() {
 void handle_box_collisions(Ball *ball) {
     if (ball->position.y + ball->radius > WINDOW_HEIGHT) {
         ball->position.y = WINDOW_HEIGHT - ball->radius;
-        if (ball->velocity.y > -1) ball->velocity.y = 0;
+
         ball->velocity.y *= -1/2.0f;
     }
     if (ball->position.y - ball->radius < 0) {
@@ -178,7 +180,7 @@ int main() {
         return -1;
     }
 
-    window = SDL_CreateWindow("physics engine", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    window = SDL_CreateWindow("physics engine", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_RESIZABLE);
     if (window == NULL) {
         SDL_Log("SDL_CreateWindow: %s", SDL_GetError());
         return -2;
@@ -201,6 +203,10 @@ int main() {
     SDL_Event event;
     int quit = 0;
 
+    Uint64 freq = SDL_GetPerformanceFrequency();
+    Uint64 prev = SDL_GetPerformanceCounter();
+    float simulation_speed = 1.0f;
+
     while (!quit) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) quit = 1;
@@ -211,14 +217,43 @@ int main() {
                     spawn_ball((float)mx, (float)my);
                 }
                 printf("%d ", ball_count);
+            } 
+            else if (event.type == SDL_EVENT_WINDOW_RESIZED){
+                int width, height;
+                SDL_GetWindowSize(window, &width, &height);
+                WINDOW_WIDTH = width;
+                WINDOW_HEIGHT = height;
+            }
+            else if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.key == SDLK_UP) {
+                    simulation_speed += 0.5f;
+                    printf("Simulation speed: %.2f\n", simulation_speed);
+                } 
+            else if (event.key.key == SDLK_DOWN) {
+                if (simulation_speed > 0.0f){
+                    simulation_speed -= 0.5f;
+                    printf("Simulation speed: %.2f\n", simulation_speed);
+                }
+            }
+            else if (event.key.key == SDLK_BACKSPACE){
+                if (ball_count >= 10) {
+                    ball_count-=10;
+                    printf("Ball removed. Total balls: %d\n", ball_count);
+                }
             }
         }
-        update_balls();
+    }
+
+        Uint64 now = SDL_GetPerformanceCounter();
+        double dt = (double)(now - prev) / (double)freq;
+        prev = now;
+        if (dt > 1.0/60.0) dt = 1.0/60.0;
+
+        update_balls(dt * simulation_speed);
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         render_balls(renderer);        
 
         SDL_RenderPresent(renderer);
