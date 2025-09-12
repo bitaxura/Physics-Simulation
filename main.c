@@ -4,152 +4,248 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MAX_BALLS 500
-int WINDOW_WIDTH = 1200;
-int WINDOW_HEIGHT = 900;
+#define MAX_BALLS 10000
+#define BALL_RADIUS 3.0f
+#define BALL_MASS 1.0f
+#define COLOR_MAX 255
+#define BALL_SPAWN_COUNT 100
+#define BALL_INIT_VEL 100.0f
+#define BALL_SEGMENTS 32
+
+#define OVERLAP_PERCENT 0.5f
+#define DIST_EPSILON 0.1f
+#define GRAVITY_ON 980.0f
+#define GRAVITY_OFF 0.0f
+
+#define SIM_SPEED_STEP 0.5f
+
+#define NUM_CELLS 10
+#define CELL_DIVISOR 10
+
+float GRAVITY = GRAVITY_OFF;
+int WINDOW_WIDTH = 1000;
+int WINDOW_HEIGHT = 1000;
+int ball_count = 0;
 
 typedef struct {
     float x, y;
-} vec;
+} Vec;
 
 typedef struct {
-    vec position;
-    vec velocity;
+    Uint8 r, g, b;
+} Color;
+
+typedef struct {
+    Vec position;
+    Vec velocity;
     float radius;
     float mass;
+    Color color;
 } Ball;
 
-vec v_add(vec a, vec b){
-    return (vec){a.x + b.x, a.y + b.y};
+typedef struct {
+    float x_min, x_max;
+    float y_min, y_max;
+    Ball *balls[MAX_BALLS];
+    int ball_count;
+} Cell;
+
+Cell cells[NUM_CELLS][NUM_CELLS];
+
+Ball balls[MAX_BALLS];
+Color mix = {255, 255, 255};
+
+Vec vec_add(Vec a, Vec b) {
+    return (Vec){a.x + b.x, a.y + b.y};
 }
 
-vec v_sub(vec a, vec b){
-    return (vec){a.x - b.x, a.y - b.y};
+Vec vec_sub(Vec a, Vec b) {
+    return (Vec){a.x - b.x, a.y - b.y};
 }
 
-vec v_mul(vec a, float b){
-    return (vec){a.x * b, a.y * b};
+Vec vec_mul(Vec a, float b) {
+    return (Vec){a.x * b, a.y * b};
 }
 
-float v_dot(vec a, vec b){
+float vec_dot(Vec a, Vec b) {
     return (float)(a.x * b.x + a.y * b.y);
 }
 
-float v_len2(vec a){
-    return v_dot(a, a);
+float vec_len2(Vec a) {
+    return vec_dot(a, a);
 }
 
-Ball balls[MAX_BALLS];
-int ball_count = 0;
+Color generate_random_color() {
+    int red = rand() % (COLOR_MAX + 1);
+    int green = rand() % (COLOR_MAX + 1);
+    int blue = rand() % (COLOR_MAX + 1);
 
-void spawn_ball(float x, float y){
+    red = (red + mix.r) / 2;
+    green = (green + mix.g) / 2;
+    blue = (blue + mix.b) / 2;
+
+    return (Color){red, green, blue};
+}
+
+void spawn_ball(float x, float y) {
     balls[ball_count].position.x = x;
     balls[ball_count].position.y = y;
 
-    balls[ball_count].velocity.x =  ((rand() % 3) * 2 - 1) * 10;
-    balls[ball_count].velocity.y =  ((rand() % 3) * 2 - 1) * 10;
+    balls[ball_count].velocity.x = ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
+    balls[ball_count].velocity.y = ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
 
-    balls[ball_count].radius = 25.0f;
-    balls[ball_count].mass = fabs((rand() % 3) * 2 - 1);
+    balls[ball_count].radius = BALL_RADIUS;
+    balls[ball_count].mass = BALL_MASS;
+
+    balls[ball_count].color = generate_random_color();
+
     ball_count++;
 }
 
 void handle_box_collisions(Ball *ball);
 void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2);
+void collision_check(Ball **balls, int ball_count, float dt);
 
 void update_balls(float dt) {
-    float gravity = 0.0f;
+    for (int i = 0; i < NUM_CELLS; i++){
+        for (int j = 0; j < NUM_CELLS; j++){
+            cells[i][j].ball_count = 0;
+        }
+    }
+    float cell_width = (WINDOW_WIDTH / NUM_CELLS);
+    float cell_height = (WINDOW_HEIGHT / NUM_CELLS);
+    for (int i = 0; i < ball_count; i++){
+        int cell_x = (int)floor(balls[i].position.x / cell_width);
+        int cell_y = (int)floor(balls[i].position.y / cell_height);
+        cells[cell_x][cell_y].balls[cells[cell_x][cell_y].ball_count] = &balls[i];
+        cells[cell_x][cell_y].ball_count++;
+    }
 
+    for (int i = 0; i < NUM_CELLS; i++){
+        for (int j = 0; j < NUM_CELLS; j++){
+            collision_check(cells[i][j].balls, cells[i][j].ball_count, dt);
+        }
+    }
+}
+
+void collision_check(Ball **balls, int ball_count, float dt){
     for (int i = 0; i < ball_count; i++) {
-        balls[i].velocity.y += gravity * dt;
-        balls[i].position.x += balls[i].velocity.x * dt;
-        balls[i].position.y += balls[i].velocity.y * dt;
-
-        handle_box_collisions(&balls[i]);
+        balls[i]->velocity.y += GRAVITY * dt;
+        balls[i]->position.x += balls[i]->velocity.x * dt;
+        balls[i]->position.y += balls[i]->velocity.y * dt;
 
         for (int j = i + 1; j < ball_count; j++){
-            float dx = balls[j].position.x - balls[i].position.x;
-            float dy = balls[j].position.y - balls[i].position.y;
-            float dist = sqrt(dx * dx + dy * dy) + 0.1f;
+            float dx = balls[j]->position.x - balls[i]->position.x;
+            float dy = balls[j]->position.y - balls[i]->position.y;
+            float dist = sqrtf(dx * dx + dy * dy) + DIST_EPSILON;
 
-            float percent = 0.5f;
+            float percent = OVERLAP_PERCENT;
 
-            if (dist < balls[i].radius + balls[j].radius){
-                float overlap = balls[i].radius + balls[j].radius - dist;
+            if (dist < balls[i]->radius + balls[j]->radius){
+                float overlap = balls[i]->radius + balls[j]->radius - dist;
 
                 float nx = dx / dist;
                 float ny = dy / dist;
 
-                balls[i].position.x -= nx * overlap * percent;
-                balls[i].position.y -= ny * overlap * percent;
-                balls[j].position.x += nx * overlap * percent;
-                balls[j].position.y += ny * overlap * percent;
+                balls[i]->position.x -= nx * overlap * percent;
+                balls[i]->position.y -= ny * overlap * percent;
+                balls[j]->position.x += nx * overlap * percent;
+                balls[j]->position.y += ny * overlap * percent;
 
-                handle_ball_to_ball_collision(&balls[i], &balls[j]);
+                handle_ball_to_ball_collision(balls[i], balls[j]);
             }
+        }
+        handle_box_collisions(balls[i]);
+    }
+}
+
+void build_ball_partition() {
+    float cell_width = (WINDOW_WIDTH / NUM_CELLS);
+    float cell_height = (WINDOW_HEIGHT / NUM_CELLS);
+    for (int i = 0; i < NUM_CELLS; i++){
+        for (int j = 0; j < NUM_CELLS; j++){
+            if (i < 0) i = 0;
+            if (j < 0) j = 0;
+            if (i >= NUM_CELLS) i = NUM_CELLS - 1;
+            if (j >= NUM_CELLS) j = NUM_CELLS - 1;
+
+            cells[i][j].x_min = i * cell_width;
+            cells[i][j].x_max = (i + 1) * cell_width;
+            cells[i][j].y_min = j * cell_height;
+            cells[i][j].y_max = (j + 1) * cell_height;
+
+            cells[i][j].ball_count = 0;
         }
     }
 }
 
 void handle_box_collisions(Ball *ball) {
-    if (ball->position.y + ball->radius > WINDOW_HEIGHT) {
+    if (ball->position.y + ball->radius >= WINDOW_HEIGHT) {
         ball->position.y = WINDOW_HEIGHT - ball->radius;
-
-        ball->velocity.y *= -1/2.0f;
-    }
-    if (ball->position.y - ball->radius < 0) {
-        ball->position.y = ball->radius;
         if (ball->velocity.y < 1) ball->velocity.y = 0;
         ball->velocity.y *= -1/2.0f;
     }
+    if (ball->position.y - ball->radius <= 0) {
+        ball->position.y = ball->radius;
 
-    if (ball->position.x - ball->radius < 0) {
+        ball->velocity.y *= -1/2.0f;
+    }
+
+    if (ball->position.x - ball->radius <= 0) {
         ball->position.x = ball->radius;
         ball->velocity.x *= -1/2.0f;
     }
-    if (ball->position.x + ball->radius > WINDOW_WIDTH) {
+    if (ball->position.x + ball->radius >= WINDOW_WIDTH) {
         ball->position.x = WINDOW_WIDTH - ball->radius;
         ball->velocity.x *= -1/2.0f;
     }
 }
 
-void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2){
-    vec rel_pos_ball1 = v_sub(ball1->position, ball2->position);
-    vec rel_pos_ball2 = v_sub(ball2->position, ball1->position);
+void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2) {
+    Vec rel_pos_ball1 = vec_sub(ball1->position, ball2->position);
+    Vec rel_pos_ball2 = vec_sub(ball2->position, ball1->position);
 
-    float b1_len2 = v_len2(rel_pos_ball1);
-    float b2_len2 = v_len2(rel_pos_ball2);
+    float b1_len2 = vec_len2(rel_pos_ball1);
+    float b2_len2 = vec_len2(rel_pos_ball2);
 
-    vec rel_vel_ball1 = v_sub(ball1->velocity, ball2->velocity);
-    vec rel_vel_ball2 = v_sub(ball2->velocity, ball1->velocity);
+    Vec rel_vel_ball1 = vec_sub(ball1->velocity, ball2->velocity);
+    Vec rel_vel_ball2 = vec_sub(ball2->velocity, ball1->velocity);
 
-    float dot_prod_ball1 = v_dot(rel_vel_ball1, rel_pos_ball1);
-    float dot_prod_ball2 = v_dot(rel_vel_ball2, rel_pos_ball2);
+    float dot_prod_ball1 = vec_dot(rel_vel_ball1, rel_pos_ball1);
+    float dot_prod_ball2 = vec_dot(rel_vel_ball2, rel_pos_ball2);
 
     float mass_factor_ball1 = 2.0f * ball1->mass / (ball1->mass + ball2->mass);
     float mass_factor_ball2 = 2.0f * ball2->mass / (ball1->mass + ball2->mass);
 
-    ball1->velocity = v_sub(ball1->velocity, v_mul(rel_pos_ball1, mass_factor_ball1 * dot_prod_ball1 / b1_len2));
-    ball2->velocity = v_sub(ball2->velocity, v_mul(rel_pos_ball2, mass_factor_ball2 * dot_prod_ball2 / b2_len2));
+    ball1->velocity = vec_sub(ball1->velocity, vec_mul(rel_pos_ball1, mass_factor_ball1 * dot_prod_ball1 / b1_len2));
+    ball2->velocity = vec_sub(ball2->velocity, vec_mul(rel_pos_ball2, mass_factor_ball2 * dot_prod_ball2 / b2_len2));
 }
 
-void draw_ball(SDL_Renderer *renderer, float px, float py, int radius){
-    const int segments = 32;
+void draw_ball(SDL_Renderer *renderer, float px, float py, int radius, Vec velocity, Color color){
+    const int segments = BALL_SEGMENTS;
     const int vertex_count = segments + 2;
     SDL_Vertex vertices[vertex_count];
 
     vertices[0].position.x = px;
     vertices[0].position.y = py;
-    vertices[0].color = (SDL_FColor){255, 255, 255, 255};
+    vertices[0].color.r = color.r / (float)COLOR_MAX;
+    vertices[0].color.g = color.g / (float)COLOR_MAX;
+    vertices[0].color.b = color.b / (float)COLOR_MAX;
+    vertices[0].color.a = 1.0f;
 
-    for (int i = 0; i<=segments; i++){
+    for (int i = 0; i <= segments; i++){
         float angle = ((float)i / (float)segments) * 2.0f * M_PI;
         float x = px + radius * cosf(angle);
         float y = py + radius * sinf(angle);
 
         vertices[i+1].position.x = x;
         vertices[i+1].position.y = y;
-        vertices[i+1].color = (SDL_FColor){255, 255, 255, 255};
+        vertices[i+1].color.r = color.r / (float)COLOR_MAX;
+        vertices[i+1].color.g = color.g / (float)COLOR_MAX;
+        vertices[i+1].color.b = color.b / (float)COLOR_MAX;
+        vertices[i+1].color.a = 1.0f;
+
+    // vertices[i+1].color = (SDL_FColor){255, 255, 255, 255};
     }
 
     const int indices_count = segments * 3;
@@ -162,11 +258,37 @@ void draw_ball(SDL_Renderer *renderer, float px, float py, int radius){
     }
 
     SDL_RenderGeometry(renderer, NULL, vertices, vertex_count, indices, indices_count);
+
+    // float x_start = px;
+    // float x_end = (px + velocity.x);
+    // float y_start = py;
+    // float y_end = (py + velocity.y);
+    // SDL_RenderLine(renderer, x_start, y_start, x_end, y_end);
 }
 
-void render_balls(SDL_Renderer *renderer){
+void render(SDL_Renderer *renderer){
     for (int i = 0; i < ball_count; i++){
-        draw_ball(renderer, balls[i].position.x, balls[i].position.y, balls[i].radius);
+        draw_ball(renderer, balls[i].position.x, balls[i].position.y, balls[i].radius, balls[i].velocity, balls[i].color);
+    }
+    for (int i = 0; i < NUM_CELLS; i++){
+        float x_value = cells[i][0].x_min;
+        SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);
+        float y_value = cells[0][i].y_min;
+        SDL_RenderLine(renderer, 0, y_value, WINDOW_WIDTH, y_value);
+    }
+
+    float x_value = cells[NUM_CELLS - 1][0].x_max-1;
+    SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);
+    float y_value = cells[0][NUM_CELLS - 1].y_max-1;
+    SDL_RenderLine(renderer, 0, y_value, WINDOW_WIDTH, y_value);
+}
+
+void print_ball_count(){
+    system("cls");
+    for (int i = 0; i < NUM_CELLS; i++){
+        for (int j = 0; j < NUM_CELLS; j++){
+            printf("Cell (%d, %d) has %d balls\n", i+1, j+1, cells[i][j].ball_count);
+        }
     }
 }
 
@@ -185,6 +307,11 @@ int main() {
         SDL_Log("SDL_CreateWindow: %s", SDL_GetError());
         return -2;
     }
+
+    int CELL_SIZE_WIDTH = WINDOW_WIDTH / CELL_DIVISOR;
+    int CELL_SIZE_HEIGHT = WINDOW_HEIGHT / CELL_DIVISOR;
+
+    build_ball_partition();
 
     renderer = SDL_CreateRenderer(window, "");
     if (renderer == NULL) {
@@ -213,33 +340,52 @@ int main() {
             else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && ball_count < MAX_BALLS){
                 float mx, my;
                 SDL_GetMouseState(&mx, &my);
-                for (int i = 0; i < 10; i++){
+                for (int i = 0; i < BALL_SPAWN_COUNT; i++){
                     spawn_ball((float)mx, (float)my);
+                    // printf("Ball color: (%d, %d, %d)\n", balls[ball_count - 1].color.r, balls[ball_count - 1].color.g, balls[ball_count - 1].color.b);
                 }
                 printf("%d ", ball_count);
-            } 
+            }
             else if (event.type == SDL_EVENT_WINDOW_RESIZED){
                 int width, height;
                 SDL_GetWindowSize(window, &width, &height);
+
                 WINDOW_WIDTH = width;
                 WINDOW_HEIGHT = height;
+                CELL_SIZE_WIDTH = WINDOW_WIDTH / CELL_DIVISOR;
+                CELL_SIZE_HEIGHT = WINDOW_HEIGHT / CELL_DIVISOR;
+
+                build_ball_partition();
             }
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_UP) {
-                    simulation_speed += 0.5f;
+                    simulation_speed += SIM_SPEED_STEP;
                     printf("Simulation speed: %.2f\n", simulation_speed);
-                } 
+                }
             else if (event.key.key == SDLK_DOWN) {
                 if (simulation_speed > 0.0f){
-                    simulation_speed -= 0.5f;
+                    simulation_speed -= SIM_SPEED_STEP;
                     printf("Simulation speed: %.2f\n", simulation_speed);
                 }
             }
             else if (event.key.key == SDLK_BACKSPACE){
-                if (ball_count >= 10) {
-                    ball_count-=10;
+                if (ball_count >= BALL_SPAWN_COUNT) {
+                    ball_count -= BALL_SPAWN_COUNT;
                     printf("Ball removed. Total balls: %d\n", ball_count);
                 }
+            }
+            else if (event.key.key == SDLK_G){
+                if (GRAVITY == GRAVITY_OFF) {
+                    GRAVITY = GRAVITY_ON;
+                    printf("Gravity enabled\n");
+                } else {
+                    GRAVITY = GRAVITY_OFF;
+                    printf("Gravity disabled\n");
+                }
+            }
+            else if (event.key.key == SDLK_ESCAPE) quit = 1;
+            else if (event.key.key == SDLK_P){
+                print_ball_count();
             }
         }
     }
@@ -254,7 +400,8 @@ int main() {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        render_balls(renderer);        
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        render(renderer);
 
         SDL_RenderPresent(renderer);
     }
