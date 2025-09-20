@@ -4,56 +4,36 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MAX_BALLS 10000
-#define BALL_RADIUS 3.0f
-#define BALL_MASS 1.0f
-#define COLOR_MAX 255
-#define BALL_SPAWN_COUNT 100
-#define BALL_INIT_VEL 100.0f
-#define BALL_SEGMENTS 32
+#define MAX_BALLS           10000
+#define BALL_RADIUS         5.0f
+#define BALL_MASS           1.0f
+#define COLOR_MAX           255
+#define BALL_SPAWN_COUNT    25
+#define BALL_INIT_VEL       200.0f
+#define BALL_SEGMENTS       32
 
-#define OVERLAP_PERCENT 0.5f
-#define DIST_EPSILON 0.1f
-#define GRAVITY_ON 980.0f
-#define GRAVITY_OFF 0.0f
+#define OVERLAP_PERCENT     0.5f
+#define DIST_EPSILON        0.05f
+#define GRAVITY_ON          980.0f
+#define GRAVITY_OFF         0.0f
+#define X_DAMP              -0.25f
+#define Y_DAMP              -0.75f
 
-#define SIM_SPEED_STEP 0.5f
+#define SIM_SPEED_STEP      0.5f
 
-#define NUM_CELLS 10
-#define CELL_DIVISOR 10
+#define NUM_CELLS           10
+#define MAX_BALLS_PER_NODE  32
+#define MAX_LEVELS          8
 
 float GRAVITY = GRAVITY_OFF;
 int WINDOW_WIDTH = 1000;
 int WINDOW_HEIGHT = 1000;
 int ball_count = 0;
+bool showGrid = false;
 
 typedef struct {
     float x, y;
 } Vec;
-
-typedef struct {
-    Uint8 r, g, b;
-} Color;
-
-typedef struct {
-    Vec position;
-    Vec velocity;
-    float radius;
-    float mass;
-    Color color;
-} Ball;
-
-typedef struct {
-    float x_min, x_max;
-    float y_min, y_max;
-    Ball *balls[MAX_BALLS];
-    int ball_count;
-} Cell;
-
-Cell cells[NUM_CELLS][NUM_CELLS];
-
-Ball balls[MAX_BALLS];
-Color mix = {255, 255, 255};
 
 Vec vec_add(Vec a, Vec b) {
     return (Vec){a.x + b.x, a.y + b.y};
@@ -75,6 +55,42 @@ float vec_len2(Vec a) {
     return vec_dot(a, a);
 }
 
+typedef struct {
+    Uint8 r, g, b;
+} Color;
+
+typedef struct {
+    Vec position;
+    Vec velocity;
+    float radius;
+    float mass;
+    Color color;
+} Ball;
+
+typedef struct {
+    float x_min, x_max;
+    float y_min, y_max;
+    Ball *balls[MAX_BALLS];
+    int ball_count;
+} Cell;
+
+typedef struct QuadNode{
+    float x_min, x_max;
+    float y_min, y_max;
+
+    Ball *balls[MAX_BALLS_PER_NODE];
+    int ball_count;
+
+    int level;
+    struct QuadNode *children[4];
+} QuadNode;
+
+Cell cells[NUM_CELLS][NUM_CELLS];
+Ball balls[MAX_BALLS];
+
+Color mix = {255, 255, 255};
+QuadNode* g_quadtree_root = NULL;
+
 Color generate_random_color() {
     int red = rand() % (COLOR_MAX + 1);
     int green = rand() % (COLOR_MAX + 1);
@@ -92,7 +108,7 @@ void spawn_ball(float x, float y) {
     balls[ball_count].position.y = y;
 
     balls[ball_count].velocity.x = ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
-    balls[ball_count].velocity.y = ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
+    balls[ball_count].velocity.y = 0; //((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
 
     balls[ball_count].radius = BALL_RADIUS;
     balls[ball_count].mass = BALL_MASS;
@@ -106,56 +122,200 @@ void handle_box_collisions(Ball *ball);
 void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2);
 void collision_check(Ball **balls, int ball_count, float dt);
 
-void update_balls(float dt) {
-    for (int i = 0; i < NUM_CELLS; i++){
-        for (int j = 0; j < NUM_CELLS; j++){
-            cells[i][j].ball_count = 0;
-        }
+QuadNode* create_node(float x_min, float x_max, float y_min, float y_max, int level){
+    QuadNode* node = malloc(sizeof(QuadNode));
+    node->x_min = x_min;
+    node->x_max = x_max;
+    node->y_min = y_min;
+    node->y_max = y_max;
+    node->ball_count = 0;
+    node->level = level;
+    for (int i = 0; i < 4; i++){
+        node->children[i] = NULL;
     }
-    float cell_width = (WINDOW_WIDTH / NUM_CELLS);
-    float cell_height = (WINDOW_HEIGHT / NUM_CELLS);
-    for (int i = 0; i < ball_count; i++){
-        int cell_x = (int)floor(balls[i].position.x / cell_width);
-        int cell_y = (int)floor(balls[i].position.y / cell_height);
-        cells[cell_x][cell_y].balls[cells[cell_x][cell_y].ball_count] = &balls[i];
-        cells[cell_x][cell_y].ball_count++;
+    return node;
+}
+
+bool ball_in_node(QuadNode* node, Ball* ball){
+    return (ball->position.x >= node->x_min &&
+            ball->position.x <= node->x_max &&
+            ball->position.y >= node->y_min &&
+            ball->position.y <= node->y_max);
+}
+
+void subdivide(QuadNode* node){
+    float mid_x = (node->x_min + node->x_max) * 0.5f;
+    float mid_y = (node->y_min + node->y_max) * 0.5f;
+
+    node->children[0] = create_node(node->x_min, mid_x, node->y_min, mid_y, node->level + 1);
+    node->children[1] = create_node(mid_x, node->x_max, node->y_min, mid_y, node->level + 1);
+    node->children[2] = create_node(node->x_min, mid_x, mid_y, node->y_max, node->level + 1);
+    node->children[3] = create_node(mid_x, node->x_max, mid_y, node->y_max, node->level + 1);
+}
+
+void insert_ball(QuadNode* node, Ball* ball){
+    if (!node->children[0] && node->ball_count < MAX_BALLS_PER_NODE){
+        node->balls[node->ball_count++] = ball;
+        return;
     }
 
-    for (int i = 0; i < NUM_CELLS; i++){
-        for (int j = 0; j < NUM_CELLS; j++){
-            collision_check(cells[i][j].balls, cells[i][j].ball_count, dt);
+    if (!node->children[0] && node->level < MAX_LEVELS){
+        subdivide(node);
+
+        for (int i = 0; i < node->ball_count; i++){
+            for (int j = 0; j < 4; j++){
+                if (ball_in_node(node->children[j], node->balls[i])){
+                    insert_ball(node->children[j], node->balls[i]);
+                    break;
+                }
+            }
+        }
+        node->ball_count = 0;
+    }
+
+    for (int i = 0; i < 4; i++){
+        if (ball_in_node(node->children[i], ball)){
+            insert_ball(node->children[i], ball);
+            return;
         }
     }
 }
 
-void collision_check(Ball **balls, int ball_count, float dt){
+void check_collision_quad(QuadNode* node, float dt){
+    if (!node) return;
+
+    if (!node->children[0]){
+        for (int i = 0; i < node->ball_count; i++){
+            Ball* ball1 = node->balls[i];
+            ball1->velocity.y += GRAVITY * dt;
+            ball1->position.x += ball1->velocity.x * dt;
+            ball1->position.y += ball1->velocity.y * dt;
+
+            for (int j = i + 1; j < node->ball_count; j++){
+                Ball* ball2 = node->balls[j];
+
+                float dx = ball2->position.x - ball1->position.x;
+                float dy = ball2->position.y - ball1->position.y;
+                float dist = sqrtf(dx * dx + dy * dy) + DIST_EPSILON;
+
+                if (dist < ball1->radius + ball2->radius){
+                    float overlap = ball1->radius + ball2->radius - dist;
+
+                    float nx = dx / dist;
+                    float ny = dy / dist;
+
+                    ball1->position.x -= nx * overlap * OVERLAP_PERCENT;
+                    ball1->position.y -= ny * overlap * OVERLAP_PERCENT;
+                    ball2->position.x += nx * overlap * OVERLAP_PERCENT;
+                    ball2->position.y += ny * overlap * OVERLAP_PERCENT;
+
+                    handle_ball_to_ball_collision(ball1, ball2);
+                }
+            }
+            handle_box_collisions(ball1);
+        }
+    }
+    else {
+        for (int i = 0; i < 4; i++){
+            check_collision_quad(node->children[i], dt);
+        }
+    }
+}
+
+void free_quad(QuadNode* node){
+    if (!node) return;
+
+    for (int i = 0; i < 4; i++){
+        if (node->children[i]){
+            free_quad(node->children[i]);
+            node->children[i] = NULL;
+        }
+    }
+
+    free(node);
+}
+
+void draw_quadtree(SDL_Renderer* renderer, QuadNode* node) {
+    if (!node) return;
+
+    float x_min = node->x_min;
+    float y_min = node->y_min;
+    float x_max = node->x_max;
+    float y_max = node->y_max;
+
+    SDL_RenderLine(renderer, x_min, y_min, x_max, y_min);
+    SDL_RenderLine(renderer, x_max, y_min, x_max, y_max);
+    SDL_RenderLine(renderer, x_max, y_max, x_min, y_max);
+    SDL_RenderLine(renderer, x_min, y_max, x_min, y_min);
+
+    for (int i = 0; i < 4; i++) {
+        draw_quadtree(renderer, node->children[i]);
+    }
+}
+
+
+void update_balls(float dt) {
+    if (g_quadtree_root) {
+        free_quad(g_quadtree_root);
+        g_quadtree_root = NULL;
+    }
+    g_quadtree_root = create_node(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT, 0);
+
+    for (int i = 0; i < ball_count; i++){
+        insert_ball(g_quadtree_root, &balls[i]);
+    }
+
+    check_collision_quad(g_quadtree_root, dt);
+
+    // for (int i = 0; i < NUM_CELLS; i++){
+    //     for (int j = 0; j < NUM_CELLS; j++){
+    //         cells[i][j].ball_count = 0;
+    //     }
+    // }
+    // float cell_width = (WINDOW_WIDTH / NUM_CELLS);
+    // float cell_height = (WINDOW_HEIGHT / NUM_CELLS);
+    // for (int i = 0; i < ball_count; i++){
+    //     int cell_x = (int)floor(balls[i].position.x / cell_width);
+    //     int cell_y = (int)floor(balls[i].position.y / cell_height);
+    //     cells[cell_x][cell_y].balls[cells[cell_x][cell_y].ball_count] = &balls[i];
+    //     cells[cell_x][cell_y].ball_count++;
+    // }
+
+    // for (int i = 0; i < NUM_CELLS; i++){
+    //     for (int j = 0; j < NUM_CELLS; j++){
+    //         collision_check(cells[i][j].balls, cells[i][j].ball_count, dt);
+    //     }
+    // }
+}
+
+void collision_check(Ball **cell_balls, int ball_count, float dt){
     for (int i = 0; i < ball_count; i++) {
-        balls[i]->velocity.y += GRAVITY * dt;
-        balls[i]->position.x += balls[i]->velocity.x * dt;
-        balls[i]->position.y += balls[i]->velocity.y * dt;
+        cell_balls[i]->velocity.y += GRAVITY * dt;
+        cell_balls[i]->position.x += cell_balls[i]->velocity.x * dt;
+        cell_balls[i]->position.y += cell_balls[i]->velocity.y * dt;
 
         for (int j = i + 1; j < ball_count; j++){
-            float dx = balls[j]->position.x - balls[i]->position.x;
-            float dy = balls[j]->position.y - balls[i]->position.y;
+            float dx = cell_balls[j]->position.x - cell_balls[i]->position.x;
+            float dy = cell_balls[j]->position.y - cell_balls[i]->position.y;
             float dist = sqrtf(dx * dx + dy * dy) + DIST_EPSILON;
 
             float percent = OVERLAP_PERCENT;
 
-            if (dist < balls[i]->radius + balls[j]->radius){
-                float overlap = balls[i]->radius + balls[j]->radius - dist;
+            if (dist < cell_balls[i]->radius + cell_balls[j]->radius){
+                float overlap = cell_balls[i]->radius + cell_balls[j]->radius - dist;
 
                 float nx = dx / dist;
                 float ny = dy / dist;
 
-                balls[i]->position.x -= nx * overlap * percent;
-                balls[i]->position.y -= ny * overlap * percent;
-                balls[j]->position.x += nx * overlap * percent;
-                balls[j]->position.y += ny * overlap * percent;
+                cell_balls[i]->position.x -= nx * overlap * percent;
+                cell_balls[i]->position.y -= ny * overlap * percent;
+                cell_balls[j]->position.x += nx * overlap * percent;
+                cell_balls[j]->position.y += ny * overlap * percent;
 
-                handle_ball_to_ball_collision(balls[i], balls[j]);
+                handle_ball_to_ball_collision(cell_balls[i], cell_balls[j]);
             }
         }
-        handle_box_collisions(balls[i]);
+        handle_box_collisions(cell_balls[i]);
     }
 }
 
@@ -183,21 +343,20 @@ void handle_box_collisions(Ball *ball) {
     if (ball->position.y + ball->radius >= WINDOW_HEIGHT) {
         ball->position.y = WINDOW_HEIGHT - ball->radius;
         if (ball->velocity.y < 1) ball->velocity.y = 0;
-        ball->velocity.y *= -1/2.0f;
+        ball->velocity.y *= Y_DAMP;
     }
     if (ball->position.y - ball->radius <= 0) {
         ball->position.y = ball->radius;
-
-        ball->velocity.y *= -1/2.0f;
+        ball->velocity.y *= Y_DAMP;
     }
 
     if (ball->position.x - ball->radius <= 0) {
         ball->position.x = ball->radius;
-        ball->velocity.x *= -1/2.0f;
+        ball->velocity.x *= X_DAMP;
     }
     if (ball->position.x + ball->radius >= WINDOW_WIDTH) {
         ball->position.x = WINDOW_WIDTH - ball->radius;
-        ball->velocity.x *= -1/2.0f;
+        ball->velocity.x *= X_DAMP;
     }
 }
 
@@ -270,17 +429,20 @@ void render(SDL_Renderer *renderer){
     for (int i = 0; i < ball_count; i++){
         draw_ball(renderer, balls[i].position.x, balls[i].position.y, balls[i].radius, balls[i].velocity, balls[i].color);
     }
-    for (int i = 0; i < NUM_CELLS; i++){
-        float x_value = cells[i][0].x_min;
-        SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);
-        float y_value = cells[0][i].y_min;
-        SDL_RenderLine(renderer, 0, y_value, WINDOW_WIDTH, y_value);
+
+    if (g_quadtree_root && showGrid) {
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+        draw_quadtree(renderer, g_quadtree_root);
     }
 
-    float x_value = cells[NUM_CELLS - 1][0].x_max-1;
-    SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);
-    float y_value = cells[0][NUM_CELLS - 1].y_max-1;
-    SDL_RenderLine(renderer, 0, y_value, WINDOW_WIDTH, y_value);
+    // if (showGrid){
+    //     for (int i = 1; i < NUM_CELLS; i++){
+    //         float x_value = cells[i][0].x_min;
+    //         SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);
+    //         float y_value = cells[0][i].y_min;
+    //         SDL_RenderLine(renderer, 0, y_value, WINDOW_WIDTH, y_value);
+    //     }
+    // }
 }
 
 void print_ball_count(){
@@ -308,10 +470,10 @@ int main() {
         return -2;
     }
 
-    int CELL_SIZE_WIDTH = WINDOW_WIDTH / CELL_DIVISOR;
-    int CELL_SIZE_HEIGHT = WINDOW_HEIGHT / CELL_DIVISOR;
+    int CELL_SIZE_WIDTH = WINDOW_WIDTH / NUM_CELLS;
+    int CELL_SIZE_HEIGHT = WINDOW_HEIGHT / NUM_CELLS;
 
-    build_ball_partition();
+    // build_ball_partition();
 
     renderer = SDL_CreateRenderer(window, "");
     if (renderer == NULL) {
@@ -352,8 +514,8 @@ int main() {
 
                 WINDOW_WIDTH = width;
                 WINDOW_HEIGHT = height;
-                CELL_SIZE_WIDTH = WINDOW_WIDTH / CELL_DIVISOR;
-                CELL_SIZE_HEIGHT = WINDOW_HEIGHT / CELL_DIVISOR;
+                CELL_SIZE_WIDTH = WINDOW_WIDTH / NUM_CELLS;
+                CELL_SIZE_HEIGHT = WINDOW_HEIGHT / NUM_CELLS;
 
                 build_ball_partition();
             }
@@ -387,6 +549,9 @@ int main() {
             else if (event.key.key == SDLK_P){
                 print_ball_count();
             }
+            else if (event.key.key == SDLK_Q){
+                showGrid = !showGrid;
+            }
         }
     }
 
@@ -404,6 +569,11 @@ int main() {
         render(renderer);
 
         SDL_RenderPresent(renderer);
+    }
+
+    if (g_quadtree_root) {
+        free_quad(g_quadtree_root);
+        g_quadtree_root = NULL;
     }
 
     SDL_Log("SDL3 shutdown");
