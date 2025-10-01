@@ -8,9 +8,9 @@
 #define BALL_RADIUS         5.0f
 #define BALL_MASS           1.0f
 #define COLOR_MAX           255
-#define BALL_SPAWN_COUNT    25
-#define BALL_INIT_VEL       200.0f
-#define BALL_SEGMENTS       32
+#define BALL_SPAWN_COUNT    48
+#define BALL_INIT_VEL       300.0f
+#define BALL_SEGMENTS       16
 
 #define OVERLAP_PERCENT     0.5f
 #define DIST_EPSILON        0.05f
@@ -18,12 +18,13 @@
 #define GRAVITY_OFF         0.0f
 #define X_DAMP              -0.25f
 #define Y_DAMP              -0.75f
+#define FRICTION            0.90f
 
 #define SIM_SPEED_STEP      0.5f
 
-#define NUM_CELLS           10
-#define MAX_BALLS_PER_NODE  32
-#define MAX_LEVELS          8
+#define NUM_CELLS           20
+#define MAX_BALLS_PER_NODE  64
+#define MAX_LEVELS          11
 
 float GRAVITY = GRAVITY_OFF;
 int WINDOW_WIDTH = 1000;
@@ -108,7 +109,7 @@ void spawn_ball(float x, float y) {
     balls[ball_count].position.y = y;
 
     balls[ball_count].velocity.x = ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
-    balls[ball_count].velocity.y = 0; //((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
+    balls[ball_count].velocity.y = 0; // ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
 
     balls[ball_count].radius = BALL_RADIUS;
     balls[ball_count].mass = BALL_MASS;
@@ -185,35 +186,7 @@ void check_collision_quad(QuadNode* node, float dt){
     if (!node) return;
 
     if (!node->children[0]){
-        for (int i = 0; i < node->ball_count; i++){
-            Ball* ball1 = node->balls[i];
-            ball1->velocity.y += GRAVITY * dt;
-            ball1->position.x += ball1->velocity.x * dt;
-            ball1->position.y += ball1->velocity.y * dt;
-
-            for (int j = i + 1; j < node->ball_count; j++){
-                Ball* ball2 = node->balls[j];
-
-                float dx = ball2->position.x - ball1->position.x;
-                float dy = ball2->position.y - ball1->position.y;
-                float dist = sqrtf(dx * dx + dy * dy) + DIST_EPSILON;
-
-                if (dist < ball1->radius + ball2->radius){
-                    float overlap = ball1->radius + ball2->radius - dist;
-
-                    float nx = dx / dist;
-                    float ny = dy / dist;
-
-                    ball1->position.x -= nx * overlap * OVERLAP_PERCENT;
-                    ball1->position.y -= ny * overlap * OVERLAP_PERCENT;
-                    ball2->position.x += nx * overlap * OVERLAP_PERCENT;
-                    ball2->position.y += ny * overlap * OVERLAP_PERCENT;
-
-                    handle_ball_to_ball_collision(ball1, ball2);
-                }
-            }
-            handle_box_collisions(ball1);
-        }
+        collision_check(node->balls, node->ball_count, dt);
     }
     else {
         for (int i = 0; i < 4; i++){
@@ -277,6 +250,12 @@ void update_balls(float dt) {
     // for (int i = 0; i < ball_count; i++){
     //     int cell_x = (int)floor(balls[i].position.x / cell_width);
     //     int cell_y = (int)floor(balls[i].position.y / cell_height);
+
+    //     if (cell_x < 0) cell_x = 0;
+    //     if (cell_x >= NUM_CELLS) cell_x = NUM_CELLS - 1;
+    //     if (cell_y < 0) cell_y = 0;
+    //     if (cell_y >= NUM_CELLS) cell_y = NUM_CELLS - 1;
+
     //     cells[cell_x][cell_y].balls[cells[cell_x][cell_y].ball_count] = &balls[i];
     //     cells[cell_x][cell_y].ball_count++;
     // }
@@ -299,18 +278,16 @@ void collision_check(Ball **cell_balls, int ball_count, float dt){
             float dy = cell_balls[j]->position.y - cell_balls[i]->position.y;
             float dist = sqrtf(dx * dx + dy * dy) + DIST_EPSILON;
 
-            float percent = OVERLAP_PERCENT;
-
             if (dist < cell_balls[i]->radius + cell_balls[j]->radius){
                 float overlap = cell_balls[i]->radius + cell_balls[j]->radius - dist;
 
                 float nx = dx / dist;
                 float ny = dy / dist;
 
-                cell_balls[i]->position.x -= nx * overlap * percent;
-                cell_balls[i]->position.y -= ny * overlap * percent;
-                cell_balls[j]->position.x += nx * overlap * percent;
-                cell_balls[j]->position.y += ny * overlap * percent;
+                cell_balls[i]->position.x -= nx * overlap * OVERLAP_PERCENT;
+                cell_balls[i]->position.y -= ny * overlap * OVERLAP_PERCENT;
+                cell_balls[j]->position.x += nx * overlap * OVERLAP_PERCENT;
+                cell_balls[j]->position.y += ny * overlap * OVERLAP_PERCENT;
 
                 handle_ball_to_ball_collision(cell_balls[i], cell_balls[j]);
             }
@@ -376,8 +353,11 @@ void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2) {
     float mass_factor_ball1 = 2.0f * ball1->mass / (ball1->mass + ball2->mass);
     float mass_factor_ball2 = 2.0f * ball2->mass / (ball1->mass + ball2->mass);
 
-    ball1->velocity = vec_sub(ball1->velocity, vec_mul(rel_pos_ball1, mass_factor_ball1 * dot_prod_ball1 / b1_len2));
-    ball2->velocity = vec_sub(ball2->velocity, vec_mul(rel_pos_ball2, mass_factor_ball2 * dot_prod_ball2 / b2_len2));
+    Vec v1 = vec_sub(ball1->velocity, vec_mul(rel_pos_ball1, mass_factor_ball1 * dot_prod_ball1 / b1_len2));
+    Vec v2 = vec_sub(ball2->velocity, vec_mul(rel_pos_ball2, mass_factor_ball2 * dot_prod_ball2 / b2_len2));
+
+    ball1->velocity = vec_mul(v1, FRICTION);
+    ball2->velocity = vec_mul(v2, FRICTION);
 }
 
 void draw_ball(SDL_Renderer *renderer, float px, float py, int radius, Vec velocity, Color color){
@@ -495,6 +475,8 @@ int main() {
     Uint64 freq = SDL_GetPerformanceFrequency();
     Uint64 prev = SDL_GetPerformanceCounter();
     float simulation_speed = 1.0f;
+    const double max_dt = 1.0 / 60.0;
+    double accumulator = 0.0;
 
     while (!quit) {
         while (SDL_PollEvent(&event)) {
@@ -517,7 +499,7 @@ int main() {
                 CELL_SIZE_WIDTH = WINDOW_WIDTH / NUM_CELLS;
                 CELL_SIZE_HEIGHT = WINDOW_HEIGHT / NUM_CELLS;
 
-                build_ball_partition();
+                // build_ball_partition();
             }
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_UP) {
@@ -558,9 +540,15 @@ int main() {
         Uint64 now = SDL_GetPerformanceCounter();
         double dt = (double)(now - prev) / (double)freq;
         prev = now;
-        if (dt > 1.0/60.0) dt = 1.0/60.0;
 
-        update_balls(dt * simulation_speed);
+        if (dt > 0.25) dt = 0.25;
+
+        accumulator += dt * simulation_speed;
+
+        while (accumulator >= max_dt) {
+            update_balls(max_dt * simulation_speed);
+            accumulator -= max_dt;
+        }
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
