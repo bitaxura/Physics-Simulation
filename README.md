@@ -34,5 +34,11 @@ A simple 2D physics simulation written in C using SDL3. The simulation demonstra
 - Collisions are only checked between balls within the same cell, greatly improving performance.
 - The grid is redrawn each frame for visualization. q
 
+## Gallery
+![Example View No Grid](./images/Example%20View%20No%20Grid.png)
+![Example View Static Grid](./images/Example%20View%20Static%20Grid.png)
+![Example View Dynamic Grid](./images/Example%20View%20Dynamic%20Grid.png)
+![No-Grid, 0 Gravity and Small Balls Demo](./images/No-Grid%2C%200%20Gravity%20and%20Small%20Balls%20Demo.gif)
+
 ## License
-MIT License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
