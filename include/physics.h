@@ -3,19 +3,19 @@
 
 #include "utils.h"
 
-#define MAX_BALLS       1000
-#define NUM_CELLS       20
-#define BALL_RADIUS     5.0f
+#define MAX_BALLS       100000
+#define NUM_CELLS       10
+#define BALL_RADIUS     1.0f
 #define BALL_MASS       1.0f
-#define BALL_INIT_VEL   100.0f
+#define BALL_INIT_VEL   10.0f
 #define X_DAMP          -0.25f
 #define Y_DAMP          -0.75f
-#define FRICTION         0.90f
+#define FRICTION         1.0f
 #define OVERLAP_PERCENT  0.5f
 #define DIST_EPSILON     0.05f
 
-#define GRAVITY_OFF 0
-#define GRAVITY_ON GRAVITY
+#define GRAVITY_OFF 0.0f
+#define GRAVITY_ON 1.0f
 
 extern int WINDOW_HEIGHT;
 extern int WINDOW_WIDTH;
@@ -23,12 +23,15 @@ extern float GRAVITY;
 
 extern int ball_count;
 
+extern const char *GRID_TYPE;
+
 typedef struct {
     Vec position;
     Vec velocity;
     float radius;
     float mass;
     Color color;
+    int ball_number;
 } Ball;
 
 typedef struct {

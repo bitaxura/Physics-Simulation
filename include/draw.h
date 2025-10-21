@@ -5,8 +5,9 @@
 #include "utils.h"
 #include "quadtree.h"
 
-#define BALL_SEGMENTS       16
+#define BALL_SEGMENTS       12
 extern bool showGrid;
+extern const char *GRID_TYPE;
 
 void draw_ball(SDL_Renderer *renderer, float px, float py, int radius, Vec velocity, Color color);
 void draw_quadtree(SDL_Renderer* renderer, QuadNode* node);

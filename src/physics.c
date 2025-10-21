@@ -1,9 +1,10 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include "physics.h"
 #include "quadtree.h"
 
-float GRAVITY = 490.0f;
+float GRAVITY = GRAVITY_ON;
 int ball_count = 0;
 
 Cell cells[NUM_CELLS][NUM_CELLS];
@@ -14,12 +15,13 @@ void spawn_ball(float x, float y) {
     balls[ball_count].position.y = y;
 
     balls[ball_count].velocity.x = ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
-    balls[ball_count].velocity.y = 0; // ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
+    balls[ball_count].velocity.y = ((rand() % 3) * 2 - 1) * BALL_INIT_VEL;
 
     balls[ball_count].radius = BALL_RADIUS;
     balls[ball_count].mass = BALL_MASS;
 
     balls[ball_count].color = generate_random_color();
+    balls[ball_count].ball_number = ball_count;
 
     ball_count++;
 }
@@ -78,6 +80,7 @@ void collision_check(Ball **cell_balls, int ball_count, float dt){
             float dx = cell_balls[j]->position.x - cell_balls[i]->position.x;
             float dy = cell_balls[j]->position.y - cell_balls[i]->position.y;
             float dist = sqrtf(dx * dx + dy * dy) + DIST_EPSILON;
+            // printf("collision checked between %d and %d\n", cell_balls[i]->ball_number, cell_balls[j]->ball_number);
 
             if (dist < cell_balls[i]->radius + cell_balls[j]->radius){
                 float overlap = cell_balls[i]->radius + cell_balls[j]->radius - dist;
@@ -98,26 +101,29 @@ void collision_check(Ball **cell_balls, int ball_count, float dt){
 }
 
 void update_balls(float dt) {
-    if (g_quadtree_root) {
-        free_quad(g_quadtree_root);
-        g_quadtree_root = NULL;
+    if (strcmp(GRID_TYPE, "QUADTREE") == 0){
+        if (g_quadtree_root) {
+            free_quad(g_quadtree_root);
+            g_quadtree_root = NULL;
+        }
+        g_quadtree_root = create_node(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT, 0);
+
+        for (int i = 0; i < ball_count; i++){
+            insert_ball_quad(g_quadtree_root, &balls[i]);
+        }
+
+        check_collision_quad(g_quadtree_root, dt);
     }
-    g_quadtree_root = create_node(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT, 0);
 
-    for (int i = 0; i < ball_count; i++){
-        insert_ball_quad(g_quadtree_root, &balls[i]);
+    if (strcmp(GRID_TYPE, "STATIC") == 0){
+        insert_balls_static();
+        
+        for (int i = 0; i < NUM_CELLS; i++){
+            for (int j = 0; j < NUM_CELLS; j++){
+                collision_check(cells[i][j].balls, cells[i][j].ball_count, dt);
+            }
+        }
     }
-
-    check_collision_quad(g_quadtree_root, dt);
-
-
-    // insert_balls_static();
-    // 
-    // for (int i = 0; i < NUM_CELLS; i++){
-    //     for (int j = 0; j < NUM_CELLS; j++){
-    //         collision_check(cells[i][j].balls, cells[i][j].ball_count, dt);
-    //     }
-    // }
 }
 
 void insert_balls_static(){

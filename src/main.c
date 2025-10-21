@@ -1,11 +1,11 @@
 #include <stdio.h>
+#include <string.h>
 #include "physics.h"
 #include "draw.h"
 
-#define BALL_SPAWN_COUNT    128
+#define BALL_SPAWN_COUNT    256
 #define SIM_SPEED_STEP      0.5f
-
-#define NUM_CELLS           20
+const char *GRID_TYPE = "QUADTREE";  // "STATIC" or "QUADTREE"
 
 int WINDOW_WIDTH = 1000;
 int WINDOW_HEIGHT = 1000;
@@ -29,7 +29,7 @@ int main() {
     int CELL_SIZE_WIDTH = WINDOW_WIDTH / NUM_CELLS;
     int CELL_SIZE_HEIGHT = WINDOW_HEIGHT / NUM_CELLS;
 
-    // build_ball_partition();
+    if (strcmp(GRID_TYPE, "STATIC") == 0) build_ball_partition();
 
     renderer = SDL_CreateRenderer(window, "");
     if (renderer == NULL) {
@@ -77,14 +77,14 @@ int main() {
                 CELL_SIZE_WIDTH = WINDOW_WIDTH / NUM_CELLS;
                 CELL_SIZE_HEIGHT = WINDOW_HEIGHT / NUM_CELLS;
 
-                // build_ball_partition();
+                if (strcmp(GRID_TYPE, "STATIC") == 0) build_ball_partition();
             }
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_UP) {
                     simulation_speed += SIM_SPEED_STEP;
                     printf("Simulation speed: %.2f\n", simulation_speed);
                 }
-            else if (event.key.key == SDLK_DOWN) {
+            else if (event.key.key == SDLK_LEFT) {
                 if (simulation_speed > 0.0f){
                     simulation_speed -= SIM_SPEED_STEP;
                     printf("Simulation speed: %.2f\n", simulation_speed);

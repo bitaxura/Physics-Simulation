@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -Iinclude -Iinclude/SDL3
+CFLAGS = -O3 -Wextra -std=c99 -Iinclude -Iinclude/SDL3
 LDFLAGS = -Llibs/SDL3 -lSDL3 -lm
 
 SRCDIR = src

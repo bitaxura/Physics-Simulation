@@ -3,14 +3,14 @@
 
 #include "physics.h"
 
-#define MAX_BALLS_PER_NODE 128
-#define MAX_LEVELS         8
+#define MAX_BALLS_PER_NODE 256
+#define MAX_LEVELS         10
 
 typedef struct QuadNode{
     float x_min, x_max;
     float y_min, y_max;
 
-    Ball *balls[MAX_BALLS_PER_NODE];
+    Ball *balls[MAX_BALLS_PER_NODE * 4];
     int ball_count;
 
     int level;
@@ -26,4 +26,4 @@ void insert_ball_quad(QuadNode* node, Ball* ball);
 void check_collision_quad(QuadNode* node, float dt);
 void free_quad(QuadNode* node);
 
-#endif
+#endif // QUADTREE_H

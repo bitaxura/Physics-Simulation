@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include "draw.h"
 
-bool showGrid = false;
+bool showGrid = true;
 
 void draw_ball(SDL_Renderer *renderer, float px, float py, int radius, Vec velocity, Color color){
     const int segments = BALL_SEGMENTS;
@@ -54,20 +54,20 @@ void render(SDL_Renderer *renderer){
     for (int i = 0; i < ball_count; i++){
         draw_ball(renderer, balls[i].position.x, balls[i].position.y, balls[i].radius, balls[i].velocity, balls[i].color);
     }
-
-    if (g_quadtree_root && showGrid) {
+    
+    if (strcmp(GRID_TYPE, "QUADTREE") == 0 && g_quadtree_root && showGrid) {
         SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
         draw_quadtree(renderer, g_quadtree_root);
     }
 
-    // if (showGrid){
-    //     for (int i = 1; i < NUM_CELLS; i++){
-    //         float x_value = cells[i][0].x_min;
-    //         SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);
-    //         float y_value = cells[0][i].y_min;
-    //         SDL_RenderLine(renderer, 0, y_value, WINDOW_WIDTH, y_value);
-    //     }
-    // }
+    if (strcmp(GRID_TYPE, "STATIC") == 0 && showGrid){
+        for (int i = 1; i < NUM_CELLS; i++){
+            float x_value = cells[i][0].x_min;
+            SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);
+            float y_value = cells[0][i].y_min;
+            SDL_RenderLine(renderer, 0, y_value, WINDOW_WIDTH, y_value);
+        }
+    }
 }
 
 void draw_quadtree(SDL_Renderer* renderer, QuadNode* node) {
