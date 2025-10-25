@@ -4,10 +4,25 @@
 #include "draw.h"
 
 bool showGrid = true;
+Vec unit_circle[BALL_SEGMENTS + 1];
+int indices[INDICES_COUNT];
+
+void init_draw_utils(){
+    for (int i = 0; i <= BALL_SEGMENTS; i++){
+        float angle = ((float)i / (float)BALL_SEGMENTS) * 2.0f * M_PI;
+        unit_circle[i].x = cosf(angle);
+        unit_circle[i].y = sinf(angle);
+    }
+
+    for (int i = 0; i < BALL_SEGMENTS; i++){
+        indices[i*3] = 0;
+        indices[i*3 + 1] = i + 1;
+        indices[i*3 + 2] = i + 2;
+    }
+}
 
 void draw_ball(SDL_Renderer *renderer, float px, float py, int radius, Vec velocity, Color color){
-    const int segments = BALL_SEGMENTS;
-    const int vertex_count = segments + 2;
+    const int vertex_count = BALL_SEGMENTS + 2;
     SDL_Vertex vertices[vertex_count];
 
     vertices[0].position.x = px;
@@ -17,31 +32,21 @@ void draw_ball(SDL_Renderer *renderer, float px, float py, int radius, Vec veloc
     vertices[0].color.b = color.b / (float)COLOR_MAX;
     vertices[0].color.a = 1.0f;
 
-    for (int i = 0; i <= segments; i++){
-        float angle = ((float)i / (float)segments) * 2.0f * M_PI;
-        float x = px + radius * cosf(angle);
-        float y = py + radius * sinf(angle);
+    for (int i = 0; i <= BALL_SEGMENTS; i++){
+        float x = px + radius * unit_circle[i].x;
+        float y = py + radius * unit_circle[i].y;
 
         vertices[i+1].position.x = x;
         vertices[i+1].position.y = y;
-        vertices[i+1].color.r = color.r / (float)COLOR_MAX;
-        vertices[i+1].color.g = color.g / (float)COLOR_MAX;
-        vertices[i+1].color.b = color.b / (float)COLOR_MAX;
+        vertices[i+1].color.r = vertices[0].color.r;
+        vertices[i+1].color.g = vertices[0].color.g;
+        vertices[i+1].color.b = vertices[0].color.b;
         vertices[i+1].color.a = 1.0f;
 
     // vertices[i+1].color = (SDL_FColor){255, 255, 255, 255};
     }
 
-    const int indices_count = segments * 3;
-    int indices[indices_count];
-
-    for (int i = 0; i < segments; i++){
-        indices[i*3] = 0;
-        indices[i*3 + 1] = i + 1;
-        indices[i*3 + 2] = i + 2;
-    }
-
-    SDL_RenderGeometry(renderer, NULL, vertices, vertex_count, indices, indices_count);
+    SDL_RenderGeometry(renderer, NULL, vertices, vertex_count, indices, INDICES_COUNT);
 
     // float x_start = px;
     // float x_end = (px + velocity.x);

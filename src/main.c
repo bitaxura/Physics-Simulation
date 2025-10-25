@@ -55,6 +55,7 @@ int main() {
     double accumulator = 0.0;
 
     printf("Gravity: %.2f\n", GRAVITY);
+    init_draw_utils();
 
     while (!quit) {
         while (SDL_PollEvent(&event)) {
