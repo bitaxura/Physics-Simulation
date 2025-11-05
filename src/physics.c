@@ -27,20 +27,20 @@ void spawn_ball(float x, float y) {
 }
 
 void handle_box_collisions(Ball *ball) {
-    if (ball->position.y + ball->radius >= WINDOW_HEIGHT) {
+    if (ball->position.y + ball->radius > WINDOW_HEIGHT) {
         ball->position.y = WINDOW_HEIGHT - ball->radius;
         ball->velocity.y *= Y_DAMP;
     }
-    if (ball->position.y - ball->radius <= 0) {
+    if (ball->position.y - ball->radius < 0) {
         ball->position.y = ball->radius;
         ball->velocity.y *= Y_DAMP;
     }
 
-    if (ball->position.x - ball->radius <= 0) {
+    if (ball->position.x - ball->radius < 0) {
         ball->position.x = ball->radius;
         ball->velocity.x *= X_DAMP;
     }
-    if (ball->position.x + ball->radius >= WINDOW_WIDTH) {
+    if (ball->position.x + ball->radius > WINDOW_WIDTH) {
         ball->position.x = WINDOW_WIDTH - ball->radius;
         ball->velocity.x *= X_DAMP;
     }
@@ -72,9 +72,8 @@ void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2) {
 
 void collision_check(Ball **cell_balls, int ball_count, float dt){
     for (int i = 0; i < ball_count; i++) {
-        cell_balls[i]->velocity.y += GRAVITY * dt;
-        cell_balls[i]->position.x += cell_balls[i]->velocity.x * dt;
-        cell_balls[i]->position.y += cell_balls[i]->velocity.y * dt;
+        balls[i].velocity.y += GRAVITY * dt;
+        balls[i].position = vec_add(balls[i].position, vec_mul(balls[i].velocity, dt));
 
         for (int j = i + 1; j < ball_count; j++){
             float dx = cell_balls[j]->position.x - cell_balls[i]->position.x;
@@ -96,11 +95,15 @@ void collision_check(Ball **cell_balls, int ball_count, float dt){
                 handle_ball_to_ball_collision(cell_balls[i], cell_balls[j]);
             }
         }
-        handle_box_collisions(cell_balls[i]);
     }
 }
 
 void update_balls(float dt) {
+    for (int i = 0; i < ball_count; i++) {
+        handle_box_collisions(&balls[i]);
+        // if (round(balls[i].velocity.y) == 0.0f) printf("%f\n", balls[i].position.y);
+    }
+
     if (strcmp(GRID_TYPE, "QUADTREE") == 0){
         if (g_quadtree_root) {
             free_quad(g_quadtree_root);

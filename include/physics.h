@@ -8,14 +8,14 @@
 #define BALL_RADIUS     1.0f
 #define BALL_MASS       1.0f
 #define BALL_INIT_VEL   10.0f
-#define X_DAMP          -0.25f
-#define Y_DAMP          -0.75f
+#define X_DAMP          -0.95f
+#define Y_DAMP          -0.95f
 #define FRICTION         1.0f
 #define OVERLAP_PERCENT  0.5f
 #define DIST_EPSILON     0.05f
 
 #define GRAVITY_OFF 0.0f
-#define GRAVITY_ON 1.0f
+#define GRAVITY_ON 980.0f
 
 extern int WINDOW_HEIGHT;
 extern int WINDOW_WIDTH;
