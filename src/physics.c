@@ -72,9 +72,6 @@ void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2) {
 
 void collision_check(Ball **cell_balls, int ball_count, float dt){
     for (int i = 0; i < ball_count; i++) {
-        balls[i].velocity.y += GRAVITY * dt;
-        balls[i].position = vec_add(balls[i].position, vec_mul(balls[i].velocity, dt));
-
         for (int j = i + 1; j < ball_count; j++){
             float dx = cell_balls[j]->position.x - cell_balls[i]->position.x;
             float dy = cell_balls[j]->position.y - cell_balls[i]->position.y;
@@ -100,8 +97,10 @@ void collision_check(Ball **cell_balls, int ball_count, float dt){
 
 void update_balls(float dt) {
     for (int i = 0; i < ball_count; i++) {
+        balls[i].velocity.y += GRAVITY * dt;
+        balls[i].position = vec_add(balls[i].position, vec_mul(balls[i].velocity, dt));
         handle_box_collisions(&balls[i]);
-        // if (round(balls[i].velocity.y) == 0.0f) printf("%f\n", balls[i].position.y);
+        if (round(balls[i].velocity.y) == 0.0f) printf("%f\n", balls[i].position.y);
     }
 
     if (strcmp(GRID_TYPE, "QUADTREE") == 0){
