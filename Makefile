@@ -18,7 +18,7 @@ $(TARGET): $(OBJECTS) | $(BINDIR)
 	$(CC) $(OBJECTS) -o $@ $(LDFLAGS)
 
 copy_dll: $(TARGET)
-	copy $(SRCDIR)\SDL3.dll $(BINDIR)\
+	cmd /C copy "$(SRCDIR)\SDL3.dll" "$(BINDIR)\"
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $(OBJDIR)
 	$(CC) $(CFLAGS) -c $< -o $@

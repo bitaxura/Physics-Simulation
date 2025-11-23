@@ -42,5 +42,8 @@ A simple 2D physics simulation written in C using SDL3. The simulation demonstra
 
 (laggy due to GIF compression)
 
+## Issues
+- The project is currently Windows only. I am working on making it cross-platform
+
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
