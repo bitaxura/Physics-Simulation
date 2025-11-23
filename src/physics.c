@@ -100,7 +100,7 @@ void update_balls(float dt) {
         balls[i].velocity.y += GRAVITY * dt;
         balls[i].position = vec_add(balls[i].position, vec_mul(balls[i].velocity, dt));
         handle_box_collisions(&balls[i]);
-        if (round(balls[i].velocity.y) == 0.0f) printf("%f\n", balls[i].position.y);
+        // if (round(balls[i].velocity.y) == 0.0f) printf("%f\n", balls[i].position.y);
     }
 
     if (strcmp(GRID_TYPE, "QUADTREE") == 0){

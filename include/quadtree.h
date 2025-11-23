@@ -4,7 +4,7 @@
 #include "physics.h"
 
 #define MAX_BALLS_PER_NODE 256
-#define MAX_LEVELS         16
+#define MAX_LEVELS         12
 
 typedef struct QuadNode{
     float x_min, x_max;

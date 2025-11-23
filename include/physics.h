@@ -15,7 +15,7 @@
 #define DIST_EPSILON     0.05f
 
 #define GRAVITY_OFF 0.0f
-#define GRAVITY_ON 980.0f
+#define GRAVITY_ON 100.0f
 
 extern int WINDOW_HEIGHT;
 extern int WINDOW_WIDTH;
