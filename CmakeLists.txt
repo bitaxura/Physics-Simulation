@@ -16,4 +16,13 @@ file(GLOB SOURCES "src/*.c")
 
 add_executable(physics_engine ${SOURCES})
 target_compile_options(physics_engine PRIVATE -O3 -Wextra)
+target_include_directories(physics_engine PRIVATE include)
 target_link_libraries(physics_engine PRIVATE SDL3::SDL3)
+
+if(WIN32)
+    add_custom_command(TARGET physics_engine POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:SDL3::SDL3>
+            $<TARGET_FILE_DIR:physics_engine>
+    )
+endif()
