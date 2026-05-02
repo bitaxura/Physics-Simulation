@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(physics_engine C)
 
 set(CMAKE_C_STANDARD 99)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -15,7 +16,7 @@ FetchContent_MakeAvailable(SDL3)
 file(GLOB SOURCES "src/*.c")
 
 add_executable(physics_engine ${SOURCES})
-target_compile_options(physics_engine PRIVATE -O3 -Wextra)
+target_compile_options(physics_engine PRIVATE -O3 -Wextra -Wall)
 target_include_directories(physics_engine PRIVATE include)
 target_link_libraries(physics_engine PRIVATE SDL3::SDL3)
 

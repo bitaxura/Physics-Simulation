@@ -60,12 +60,12 @@ void render(SDL_Renderer *renderer){
         draw_ball(renderer, balls[i].position.x, balls[i].position.y, balls[i].radius, balls[i].velocity, balls[i].color);
     }
     
-    if (strcmp(GRID_TYPE, "QUADTREE") == 0 && g_quadtree_root && showGrid) {
+    if (GRID_TYPE == 1 && g_quadtree_root && showGrid) {
         SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
         draw_quadtree(renderer, g_quadtree_root);
     }
 
-    if (strcmp(GRID_TYPE, "STATIC") == 0 && showGrid){
+    if (GRID_TYPE == 0 && showGrid){
         for (int i = 1; i < NUM_CELLS; i++){
             float x_value = cells[i][0].x_min;
             SDL_RenderLine(renderer, x_value, 0, x_value, WINDOW_HEIGHT);

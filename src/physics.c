@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include "physics.h"
@@ -47,39 +46,39 @@ void handle_box_collisions(Ball *ball) {
 }
 
 void handle_ball_to_ball_collision(Ball *ball1, Ball *ball2) {
-    Vec rel_pos_ball1 = vec_sub(ball1->position, ball2->position);
-    Vec rel_pos_ball2 = vec_sub(ball2->position, ball1->position);
-
-    float b1_len2 = vec_len2(rel_pos_ball1);
-    float b2_len2 = vec_len2(rel_pos_ball2);
-
-    Vec rel_vel_ball1 = vec_sub(ball1->velocity, ball2->velocity);
-    Vec rel_vel_ball2 = vec_sub(ball2->velocity, ball1->velocity);
-
-    float dot_prod_ball1 = vec_dot(rel_vel_ball1, rel_pos_ball1);
-    float dot_prod_ball2 = vec_dot(rel_vel_ball2, rel_pos_ball2);
-
-    float mass_factor_ball1 = 2.0f * ball1->mass / (ball1->mass + ball2->mass);
-    float mass_factor_ball2 = 2.0f * ball2->mass / (ball1->mass + ball2->mass);
-
-    Vec v1 = vec_sub(ball1->velocity, vec_mul(rel_pos_ball1, mass_factor_ball1 * dot_prod_ball1 / b1_len2));
-    Vec v2 = vec_sub(ball2->velocity, vec_mul(rel_pos_ball2, mass_factor_ball2 * dot_prod_ball2 / b2_len2));
-
-    ball1->velocity = vec_mul(v1, FRICTION);
-    ball2->velocity = vec_mul(v2, FRICTION);
+    Vec rel_pos = vec_sub(ball1->position, ball2->position);
+    float len2 = vec_len2(rel_pos);
+    if (len2 <= 1.0e-8f) {
+        return;
+    }
+    
+    Vec rel_vel = vec_sub(ball1->velocity, ball2->velocity);
+    float dot_prod = vec_dot(rel_vel, rel_pos);
+    if (dot_prod >= 0.0f) {
+        return;
+    }
+    
+    float mass_sum = ball1->mass + ball2->mass;
+    float mass_factor_ball1 = 2.0f * ball2->mass / mass_sum;
+    float mass_factor_ball2 = 2.0f * ball1->mass / mass_sum;
+    
+    float inv_len2 = 1.0f / len2;
+    ball1->velocity = vec_mul(vec_sub(ball1->velocity, vec_mul(rel_pos, mass_factor_ball1 * dot_prod * inv_len2)), FRICTION);
+    ball2->velocity = vec_mul(vec_add(ball2->velocity, vec_mul(rel_pos, mass_factor_ball2 * dot_prod * inv_len2)), FRICTION);
 }
-
 
 void collision_check(Ball **cell_balls, int ball_count, float dt){
     for (int i = 0; i < ball_count; i++) {
         for (int j = i + 1; j < ball_count; j++){
             float dx = cell_balls[j]->position.x - cell_balls[i]->position.x;
             float dy = cell_balls[j]->position.y - cell_balls[i]->position.y;
-            float dist = sqrtf(dx * dx + dy * dy) + DIST_EPSILON;
+            float radius_sum = cell_balls[i]->radius + cell_balls[j]->radius;
+            float dist2 = dx * dx + dy * dy;
             // printf("collision checked between %d and %d\n", cell_balls[i]->ball_number, cell_balls[j]->ball_number);
 
-            if (dist < cell_balls[i]->radius + cell_balls[j]->radius){
-                float overlap = cell_balls[i]->radius + cell_balls[j]->radius - dist;
+            if (dist2 < radius_sum * radius_sum){
+                float dist = sqrtf(dist2) + DIST_EPSILON;
+                float overlap = radius_sum - dist;
 
                 float nx = dx / dist;
                 float ny = dy / dist;
@@ -103,7 +102,7 @@ void update_balls(float dt) {
         // if (round(balls[i].velocity.y) == 0.0f) printf("%f\n", balls[i].position.y);
     }
 
-    if (strcmp(GRID_TYPE, "QUADTREE") == 0){
+    if (GRID_TYPE == 1){
         if (g_quadtree_root) {
             free_quad(g_quadtree_root);
             g_quadtree_root = NULL;
@@ -117,7 +116,7 @@ void update_balls(float dt) {
         check_collision_quad(g_quadtree_root, dt);
     }
 
-    if (strcmp(GRID_TYPE, "STATIC") == 0){
+    if (GRID_TYPE == 0){
         insert_balls_static();
         
         for (int i = 0; i < NUM_CELLS; i++){

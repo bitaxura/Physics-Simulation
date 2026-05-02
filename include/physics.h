@@ -4,8 +4,8 @@
 #include "utils.h"
 
 #define MAX_BALLS       100000
-#define NUM_CELLS       10
-#define BALL_RADIUS     1.0f
+#define NUM_CELLS       1
+#define BALL_RADIUS     10.0f
 #define BALL_MASS       1.0f
 #define BALL_INIT_VEL   10.0f
 #define X_DAMP          -0.95f
@@ -20,10 +20,9 @@
 extern int WINDOW_HEIGHT;
 extern int WINDOW_WIDTH;
 extern float GRAVITY;
-
 extern int ball_count;
 
-extern const char *GRID_TYPE;
+extern const unsigned int GRID_TYPE;
 
 typedef struct {
     Vec position;
